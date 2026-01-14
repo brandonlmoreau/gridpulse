@@ -198,7 +198,7 @@ async function loadTelemetryChart() {
     }
     
     try {
-        const res = await fetch(`${API_BASE}/api/telemetry/${encodeURIComponent(deviceId)}?limit=20`);
+        const res = await fetch(`${API_BASE}/api/telemetry?device_id=${encodeURIComponent(deviceId)}&limit=20`);
         const data = await res.json();
         const telemetry = (data.telemetry || []).reverse();
         
