@@ -212,7 +212,9 @@ async function checkServerStatus() {
 // Load Devices
 async function loadDevices() {
     try {
-        const res = await fetch(`${API_BASE}/api/devices`);
+        const res = await fetch(`${API_BASE}/api/devices`, {
+            headers: getAuthHeaders()
+        });
         const data = await res.json();
         devices = data.devices || [];
         
@@ -265,7 +267,8 @@ async function deleteDevice(deviceId, deviceName) {
     
     try {
         const res = await fetch(`${API_BASE}/api/delete-device?id=${encodeURIComponent(deviceId)}`, {
-            method: 'POST'
+            method: 'POST',
+            headers: getAuthHeaders()
         });
         
         if (res.ok) {
@@ -298,7 +301,9 @@ function updateDeviceSelect() {
 // Load Alerts
 async function loadAlerts() {
     try {
-        const res = await fetch(`${API_BASE}/api/alerts`);
+        const res = await fetch(`${API_BASE}/api/alerts`, {
+            headers: getAuthHeaders()
+        });
         const data = await res.json();
         alerts = data.alerts || [];
         
@@ -344,7 +349,10 @@ function formatAlertType(type) {
 
 async function acknowledgeAlert(alertId) {
     try {
-        await fetch(`${API_BASE}/api/alerts/${alertId}/ack`, { method: 'POST' });
+        await fetch(`${API_BASE}/api/alerts/${alertId}/ack`, { 
+            method: 'POST',
+            headers: getAuthHeaders()
+        });
         loadAlerts();
     } catch (e) {
         console.error('Failed to acknowledge alert:', e);
@@ -367,7 +375,9 @@ async function loadTelemetryChart() {
     }
     
     try {
-        const res = await fetch(`${API_BASE}/api/telemetry?device_id=${encodeURIComponent(deviceId)}&limit=20`);
+        const res = await fetch(`${API_BASE}/api/telemetry?device_id=${encodeURIComponent(deviceId)}&limit=20`, {
+            headers: getAuthHeaders()
+        });
         const data = await res.json();
         const telemetry = (data.telemetry || []).reverse();
         
@@ -563,7 +573,7 @@ async function addDevice(e) {
     try {
         const res = await fetch(`${API_BASE}/api/devices`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
             body: JSON.stringify(device)
         });
         
@@ -602,7 +612,7 @@ async function sendTelemetry(e) {
     try {
         const res = await fetch(`${API_BASE}/api/telemetry`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
             body: JSON.stringify(telemetry)
         });
         
