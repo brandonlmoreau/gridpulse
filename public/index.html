@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GridPulse - IoT Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                    </svg>
+                </div>
+                <h1>GridPulse</h1>
+            </div>
+            <div class="header-status">
+                <span class="status-dot" id="serverStatus"></span>
+                <span id="serverStatusText">Connecting...</span>
+            </div>
+        </header>
+
+        <!-- Stats Bar -->
+        <div class="stats-bar">
+            <div class="stat-card">
+                <div class="stat-value" id="totalDevices">-</div>
+                <div class="stat-label">Devices</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="onlineDevices">-</div>
+                <div class="stat-label">Online</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="activeAlerts">-</div>
+                <div class="stat-label">Active Alerts</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="avgTemp">-</div>
+                <div class="stat-label">Avg Temp</div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Panel - Devices -->
+            <div class="panel devices-panel">
+                <div class="panel-header">
+                    <h2>Devices</h2>
+                    <button class="btn-add" onclick="showAddDevice()">+ Add Device</button>
+                </div>
+                <div class="devices-list" id="devicesList">
+                    <div class="loading">Loading devices...</div>
+                </div>
+            </div>
+
+            <!-- Center Panel - Charts -->
+            <div class="panel charts-panel">
+                <div class="panel-header">
+                    <h2>Telemetry</h2>
+                    <select id="chartDevice" onchange="loadTelemetryChart()">
+                        <option value="">Select device...</option>
+                    </select>
+                </div>
+                <div class="charts-container">
+                    <div class="chart-wrapper">
+                        <canvas id="tempChart"></canvas>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="batteryChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel - Alerts -->
+            <div class="panel alerts-panel">
+                <div class="panel-header">
+                    <h2>Alerts</h2>
+                    <span class="alert-count" id="alertCount">0</span>
+                </div>
+                <div class="alerts-list" id="alertsList">
+                    <div class="no-alerts">No active alerts</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Device Modal -->
+        <div class="modal" id="addDeviceModal">
+            <div class="modal-content">
+                <h3>Register New Device</h3>
+                <form id="addDeviceForm" onsubmit="addDevice(event)">
+                    <div class="form-group">
+                        <label>Device ID</label>
+                        <input type="text" id="deviceId" placeholder="sensor-001" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" id="deviceName" placeholder="Temperature Sensor" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Location</label>
+                        <input type="text" id="deviceLocation" placeholder="Building A">
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-cancel" onclick="hideAddDevice()">Cancel</button>
+                        <button type="submit" class="btn-submit">Add Device</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Send Telemetry Modal -->
+        <div class="modal" id="telemetryModal">
+            <div class="modal-content">
+                <h3>Send Telemetry</h3>
+                <form id="telemetryForm" onsubmit="sendTelemetry(event)">
+                    <input type="hidden" id="telemetryDeviceId">
+                    <div class="form-group">
+                        <label>Temperature (°C)</label>
+                        <input type="number" id="telemetryTemp" step="0.1" value="25" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Humidity (%)</label>
+                        <input type="number" id="telemetryHumidity" step="0.1" value="50" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Battery (%)</label>
+                        <input type="number" id="telemetryBattery" step="0.1" value="85" required>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-cancel" onclick="hideTelemetry()">Cancel</button>
+                        <button type="submit" class="btn-submit">Send</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

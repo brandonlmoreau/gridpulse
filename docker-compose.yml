@@ -1,0 +1,10 @@
+services:
+  gridpulse:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - gridpulse_data:/app/build
+
+volumes:
+  gridpulse_data:
