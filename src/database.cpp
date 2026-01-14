@@ -17,16 +17,19 @@ void Database::initialize() {
 }
 
 void Database::createTables() {
-    // Devices table
+    // Devices table (with user ownership)
     db_->exec(R"(
         CREATE TABLE IF NOT EXISTS devices (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            device_id TEXT UNIQUE NOT NULL,
+            user_id INTEGER NOT NULL,
+            device_id TEXT NOT NULL,
             name TEXT NOT NULL,
             location TEXT,
             status TEXT DEFAULT 'offline',
             created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            UNIQUE(user_id, device_id)
         )
     )");
     
@@ -69,6 +72,7 @@ void Database::createTables() {
     )");
     
     // Create indexes for common queries
+    db_->exec("CREATE INDEX IF NOT EXISTS idx_devices_user ON devices(user_id)");
     db_->exec("CREATE INDEX IF NOT EXISTS idx_telemetry_device ON telemetry(device_id)");
     db_->exec("CREATE INDEX IF NOT EXISTS idx_telemetry_timestamp ON telemetry(timestamp)");
     db_->exec("CREATE INDEX IF NOT EXISTS idx_alerts_device ON alerts(device_id)");
@@ -86,59 +90,98 @@ std::string Database::getCurrentTimestamp() {
 
 // Device operations
 
-int64_t Database::createDevice(const Device& device) {
+int64_t Database::createDevice(const Device& device, int64_t user_id) {
     SQLite::Statement query(*db_, 
-        "INSERT INTO devices (device_id, name, location, status, created_at, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?)");
+        "INSERT INTO devices (user_id, device_id, name, location, status, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)");
     
     auto timestamp = getCurrentTimestamp();
-    query.bind(1, device.device_id);
-    query.bind(2, device.name);
-    query.bind(3, device.location);
-    query.bind(4, device.status.empty() ? "offline" : device.status);
-    query.bind(5, timestamp);
+    query.bind(1, user_id);
+    query.bind(2, device.device_id);
+    query.bind(3, device.name);
+    query.bind(4, device.location);
+    query.bind(5, device.status.empty() ? "offline" : device.status);
     query.bind(6, timestamp);
+    query.bind(7, timestamp);
     
     query.exec();
     auto id = db_->getLastInsertRowid();
-    spdlog::info("Created device: {} (id={})", device.device_id, id);
+    spdlog::info("Created device: {} for user {} (id={})", device.device_id, user_id, id);
     return id;
 }
 
-std::optional<Device> Database::getDevice(const std::string& device_id) {
+std::optional<Device> Database::getDevice(const std::string& device_id, int64_t user_id) {
     SQLite::Statement query(*db_, 
-        "SELECT id, device_id, name, location, status, created_at, updated_at "
+        "SELECT id, user_id, device_id, name, location, status, created_at, updated_at "
+        "FROM devices WHERE device_id = ? AND user_id = ?");
+    query.bind(1, device_id);
+    query.bind(2, user_id);
+    
+    if (query.executeStep()) {
+        Device d;
+        d.id = query.getColumn(0).getInt64();
+        d.user_id = query.getColumn(1).getInt64();
+        d.device_id = query.getColumn(2).getString();
+        d.name = query.getColumn(3).getString();
+        d.location = query.getColumn(4).getString();
+        d.status = query.getColumn(5).getString();
+        d.created_at = query.getColumn(6).getString();
+        d.updated_at = query.getColumn(7).getString();
+        return d;
+    }
+    return std::nullopt;
+}
+
+std::optional<Device> Database::getDeviceAny(const std::string& device_id) {
+    SQLite::Statement query(*db_, 
+        "SELECT id, user_id, device_id, name, location, status, created_at, updated_at "
         "FROM devices WHERE device_id = ?");
     query.bind(1, device_id);
     
     if (query.executeStep()) {
         Device d;
         d.id = query.getColumn(0).getInt64();
-        d.device_id = query.getColumn(1).getString();
-        d.name = query.getColumn(2).getString();
-        d.location = query.getColumn(3).getString();
-        d.status = query.getColumn(4).getString();
-        d.created_at = query.getColumn(5).getString();
-        d.updated_at = query.getColumn(6).getString();
+        d.user_id = query.getColumn(1).getInt64();
+        d.device_id = query.getColumn(2).getString();
+        d.name = query.getColumn(3).getString();
+        d.location = query.getColumn(4).getString();
+        d.status = query.getColumn(5).getString();
+        d.created_at = query.getColumn(6).getString();
+        d.updated_at = query.getColumn(7).getString();
         return d;
     }
     return std::nullopt;
 }
 
-std::vector<Device> Database::getAllDevices() {
+bool Database::isDeviceOwner(const std::string& device_id, int64_t user_id) {
+    SQLite::Statement query(*db_, 
+        "SELECT COUNT(*) FROM devices WHERE device_id = ? AND user_id = ?");
+    query.bind(1, device_id);
+    query.bind(2, user_id);
+    
+    if (query.executeStep()) {
+        return query.getColumn(0).getInt() > 0;
+    }
+    return false;
+}
+
+std::vector<Device> Database::getAllDevices(int64_t user_id) {
     std::vector<Device> devices;
     SQLite::Statement query(*db_, 
-        "SELECT id, device_id, name, location, status, created_at, updated_at FROM devices");
+        "SELECT id, user_id, device_id, name, location, status, created_at, updated_at "
+        "FROM devices WHERE user_id = ?");
+    query.bind(1, user_id);
     
     while (query.executeStep()) {
         Device d;
         d.id = query.getColumn(0).getInt64();
-        d.device_id = query.getColumn(1).getString();
-        d.name = query.getColumn(2).getString();
-        d.location = query.getColumn(3).getString();
-        d.status = query.getColumn(4).getString();
-        d.created_at = query.getColumn(5).getString();
-        d.updated_at = query.getColumn(6).getString();
+        d.user_id = query.getColumn(1).getInt64();
+        d.device_id = query.getColumn(2).getString();
+        d.name = query.getColumn(3).getString();
+        d.location = query.getColumn(4).getString();
+        d.status = query.getColumn(5).getString();
+        d.created_at = query.getColumn(6).getString();
+        d.updated_at = query.getColumn(7).getString();
         devices.push_back(d);
     }
     return devices;
@@ -153,9 +196,10 @@ bool Database::updateDeviceStatus(const std::string& device_id, const std::strin
     return query.exec() > 0;
 }
 
-bool Database::deleteDevice(const std::string& device_id) {
-    SQLite::Statement query(*db_, "DELETE FROM devices WHERE device_id = ?");
+bool Database::deleteDevice(const std::string& device_id, int64_t user_id) {
+    SQLite::Statement query(*db_, "DELETE FROM devices WHERE device_id = ? AND user_id = ?");
     query.bind(1, device_id);
+    query.bind(2, user_id);
     return query.exec() > 0;
 }
 
@@ -229,11 +273,16 @@ int64_t Database::createAlert(const Alert& alert) {
     return id;
 }
 
-std::vector<Alert> Database::getUnacknowledgedAlerts() {
+std::vector<Alert> Database::getUnacknowledgedAlerts(int64_t user_id) {
     std::vector<Alert> alerts;
+    // Only get alerts for devices owned by this user
     SQLite::Statement query(*db_,
-        "SELECT id, device_id, alert_type, message, severity, acknowledged, created_at "
-        "FROM alerts WHERE acknowledged = 0 ORDER BY created_at DESC");
+        "SELECT a.id, a.device_id, a.alert_type, a.message, a.severity, a.acknowledged, a.created_at "
+        "FROM alerts a "
+        "INNER JOIN devices d ON a.device_id = d.device_id "
+        "WHERE a.acknowledged = 0 AND d.user_id = ? "
+        "ORDER BY a.created_at DESC");
+    query.bind(1, user_id);
     
     while (query.executeStep()) {
         Alert a;
@@ -271,12 +320,16 @@ std::vector<Alert> Database::getAlertsByDevice(const std::string& device_id) {
     return alerts;
 }
 
-bool Database::acknowledgeAlert(int64_t alert_id) {
-    SQLite::Statement query(*db_, "UPDATE alerts SET acknowledged = 1 WHERE id = ?");
+bool Database::acknowledgeAlert(int64_t alert_id, int64_t user_id) {
+    // Only allow acknowledging alerts for devices owned by this user
+    SQLite::Statement query(*db_, 
+        "UPDATE alerts SET acknowledged = 1 "
+        "WHERE id = ? AND device_id IN (SELECT device_id FROM devices WHERE user_id = ?)");
     query.bind(1, alert_id);
+    query.bind(2, user_id);
     auto updated = query.exec() > 0;
     if (updated) {
-        spdlog::info("Alert {} acknowledged", alert_id);
+        spdlog::info("Alert {} acknowledged by user {}", alert_id, user_id);
     }
     return updated;
 }

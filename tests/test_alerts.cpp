@@ -14,11 +14,14 @@ protected:
         db_ = std::make_unique<Database>(test_db_path_);
         db_->initialize();
         
+        // Create a test user
+        test_user_id_ = db_->createUser("alerttestuser", "alerttest@test.com", "hashedpassword");
+        
         // Create test device
         Device device;
         device.device_id = "alert-device";
         device.name = "Test Device";
-        db_->createDevice(device);
+        db_->createDevice(device, test_user_id_);
         
         // Create alert checker with custom config
         AlertConfig config;
@@ -37,6 +40,7 @@ protected:
     std::string test_db_path_;
     std::unique_ptr<Database> db_;
     std::unique_ptr<AlertChecker> checker_;
+    int64_t test_user_id_ = 0;
 };
 
 TEST_F(AlertCheckerTest, NoAlertForNormalTelemetry) {

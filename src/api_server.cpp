@@ -210,8 +210,11 @@ void ApiServer::handleHealth(const httplib::Request&, httplib::Response& res) {
     });
 }
 
-void ApiServer::handleGetDevices(const httplib::Request&, httplib::Response& res) {
-    auto devices = db_.getAllDevices();
+void ApiServer::handleGetDevices(const httplib::Request& req, httplib::Response& res) {
+    auto user_id = authenticate(req, res);
+    if (!user_id) return;
+    
+    auto devices = db_.getAllDevices(*user_id);
     nlohmann::json json_devices = nlohmann::json::array();
     for (const auto& d : devices) {
         json_devices.push_back(d);
@@ -220,12 +223,15 @@ void ApiServer::handleGetDevices(const httplib::Request&, httplib::Response& res
 }
 
 void ApiServer::handleGetDevice(const httplib::Request& req, httplib::Response& res) {
+    auto user_id = authenticate(req, res);
+    if (!user_id) return;
+    
     if (!req.has_param("id")) {
         errorResponse(res, 400, "Missing 'id' parameter");
         return;
     }
     auto device_id = req.get_param_value("id");
-    auto device = db_.getDevice(device_id);
+    auto device = db_.getDevice(device_id, *user_id);
     
     if (device) {
         jsonResponse(res, 200, *device);
@@ -235,6 +241,9 @@ void ApiServer::handleGetDevice(const httplib::Request& req, httplib::Response& 
 }
 
 void ApiServer::handleCreateDevice(const httplib::Request& req, httplib::Response& res) {
+    auto user_id = authenticate(req, res);
+    if (!user_id) return;
+    
     try {
         auto json = nlohmann::json::parse(req.body);
         
@@ -243,14 +252,15 @@ void ApiServer::handleCreateDevice(const httplib::Request& req, httplib::Respons
         device.name = json.at("name").get<std::string>();
         device.location = json.value("location", "");
         device.status = "offline";
+        device.user_id = *user_id;
         
-        // Check if device already exists
-        if (db_.getDevice(device.device_id)) {
+        // Check if device already exists for this user
+        if (db_.getDevice(device.device_id, *user_id)) {
             errorResponse(res, 409, "Device already exists");
             return;
         }
         
-        auto id = db_.createDevice(device);
+        auto id = db_.createDevice(device, *user_id);
         device.id = id;
         
         jsonResponse(res, 201, device);
@@ -262,19 +272,22 @@ void ApiServer::handleCreateDevice(const httplib::Request& req, httplib::Respons
 }
 
 void ApiServer::handleDeleteDevice(const httplib::Request& req, httplib::Response& res) {
+    auto user_id = authenticate(req, res);
+    if (!user_id) return;
+    
     if (!req.has_param("id")) {
         errorResponse(res, 400, "Missing 'id' parameter");
         return;
     }
     auto device_id = req.get_param_value("id");
     
-    // Check if device exists
-    if (!db_.getDevice(device_id)) {
+    // Check if device exists and belongs to user
+    if (!db_.getDevice(device_id, *user_id)) {
         errorResponse(res, 404, "Device not found");
         return;
     }
     
-    if (db_.deleteDevice(device_id)) {
+    if (db_.deleteDevice(device_id, *user_id)) {
         nlohmann::json response = {{"success", true}, {"message", "Device deleted"}};
         jsonResponse(res, 200, response);
     } else {
@@ -283,6 +296,9 @@ void ApiServer::handleDeleteDevice(const httplib::Request& req, httplib::Respons
 }
 
 void ApiServer::handlePostTelemetry(const httplib::Request& req, httplib::Response& res) {
+    auto user_id = authenticate(req, res);
+    if (!user_id) return;
+    
     try {
         auto json = nlohmann::json::parse(req.body);
         
@@ -293,8 +309,8 @@ void ApiServer::handlePostTelemetry(const httplib::Request& req, httplib::Respon
         telemetry.battery_level = json.at("battery_level").get<double>();
         telemetry.timestamp = json.value("timestamp", "");
         
-        // Verify device exists
-        if (!db_.getDevice(telemetry.device_id)) {
+        // Verify device exists and belongs to user
+        if (!db_.getDevice(telemetry.device_id, *user_id)) {
             errorResponse(res, 404, "Device not found");
             return;
         }
@@ -323,11 +339,20 @@ void ApiServer::handlePostTelemetry(const httplib::Request& req, httplib::Respon
 }
 
 void ApiServer::handleGetTelemetry(const httplib::Request& req, httplib::Response& res) {
+    auto user_id = authenticate(req, res);
+    if (!user_id) return;
+    
     if (!req.has_param("device_id")) {
         errorResponse(res, 400, "Missing 'device_id' parameter");
         return;
     }
     auto device_id = req.get_param_value("device_id");
+    
+    // Verify device belongs to user
+    if (!db_.getDevice(device_id, *user_id)) {
+        errorResponse(res, 404, "Device not found");
+        return;
+    }
     
     // Get limit from query param, default 100
     int limit = 100;
@@ -352,8 +377,11 @@ void ApiServer::handleGetTelemetry(const httplib::Request& req, httplib::Respons
     });
 }
 
-void ApiServer::handleGetAlerts(const httplib::Request&, httplib::Response& res) {
-    auto alerts = db_.getUnacknowledgedAlerts();
+void ApiServer::handleGetAlerts(const httplib::Request& req, httplib::Response& res) {
+    auto user_id = authenticate(req, res);
+    if (!user_id) return;
+    
+    auto alerts = db_.getUnacknowledgedAlerts(*user_id);
     
     nlohmann::json json_alerts = nlohmann::json::array();
     for (const auto& a : alerts) {
@@ -364,10 +392,13 @@ void ApiServer::handleGetAlerts(const httplib::Request&, httplib::Response& res)
 }
 
 void ApiServer::handleAckAlert(const httplib::Request& req, httplib::Response& res) {
+    auto user_id = authenticate(req, res);
+    if (!user_id) return;
+    
     try {
         auto alert_id = std::stoll(req.matches[1].str());
         
-        if (db_.acknowledgeAlert(alert_id)) {
+        if (db_.acknowledgeAlert(alert_id, *user_id)) {
             jsonResponse(res, 200, {{"message", "Alert acknowledged"}, {"alert_id", alert_id}});
         } else {
             errorResponse(res, 404, "Alert not found");

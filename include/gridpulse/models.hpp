@@ -10,6 +10,7 @@ namespace gridpulse {
 // Represents an IoT device in the system
 struct Device {
     int64_t id = 0;
+    int64_t user_id = 0;        // Owner of this device
     std::string device_id;      // Unique identifier (e.g., "sensor-001")
     std::string name;           // Human-readable name
     std::string location;       // Physical location
@@ -49,7 +50,7 @@ struct User {
 };
 
 // JSON serialization
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Device, id, device_id, name, location, status, created_at, updated_at)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Device, id, user_id, device_id, name, location, status, created_at, updated_at)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Telemetry, id, device_id, temperature, humidity, battery_level, timestamp)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Alert, id, device_id, alert_type, message, severity, acknowledged, created_at)
 

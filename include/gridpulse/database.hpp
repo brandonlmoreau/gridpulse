@@ -19,23 +19,25 @@ public:
     // Initialize database schema
     void initialize();
     
-    // Device operations
-    int64_t createDevice(const Device& device);
-    std::optional<Device> getDevice(const std::string& device_id);
-    std::vector<Device> getAllDevices();
+    // Device operations (user_id required for ownership)
+    int64_t createDevice(const Device& device, int64_t user_id);
+    std::optional<Device> getDevice(const std::string& device_id, int64_t user_id);
+    std::optional<Device> getDeviceAny(const std::string& device_id);  // For telemetry lookup
+    std::vector<Device> getAllDevices(int64_t user_id);
     bool updateDeviceStatus(const std::string& device_id, const std::string& status);
-    bool deleteDevice(const std::string& device_id);
+    bool deleteDevice(const std::string& device_id, int64_t user_id);
+    bool isDeviceOwner(const std::string& device_id, int64_t user_id);
     
     // Telemetry operations
     int64_t insertTelemetry(const Telemetry& telemetry);
     std::vector<Telemetry> getRecentTelemetry(const std::string& device_id, int limit = 100);
     std::optional<Telemetry> getLatestTelemetry(const std::string& device_id);
     
-    // Alert operations
+    // Alert operations (filtered by user's devices)
     int64_t createAlert(const Alert& alert);
-    std::vector<Alert> getUnacknowledgedAlerts();
+    std::vector<Alert> getUnacknowledgedAlerts(int64_t user_id);
     std::vector<Alert> getAlertsByDevice(const std::string& device_id);
-    bool acknowledgeAlert(int64_t alert_id);
+    bool acknowledgeAlert(int64_t alert_id, int64_t user_id);
     
     // User operations
     int64_t createUser(const std::string& username, const std::string& email, const std::string& password_hash);
