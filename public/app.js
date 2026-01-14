@@ -139,6 +139,7 @@ function handleLogout() {
     selectedDevice = null;
     devices = [];
     alerts = [];
+    clearCharts();  // Clear telemetry charts on logout
     showAuthScreen();
 }
 
@@ -168,6 +169,11 @@ async function verifyToken() {
 
 // Initialize dashboard after login
 function initializeDashboard() {
+    // Clear any previous user's data from charts
+    clearCharts();
+    selectedDevice = null;
+    document.getElementById('chartDevice').value = '';
+    
     checkServerStatus();
     loadDevices();
     loadAlerts();
