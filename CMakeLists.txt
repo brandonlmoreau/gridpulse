@@ -8,12 +8,13 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Fetch dependencies automatically (simpler than vcpkg)
 include(FetchContent)
 
-# nlohmann/json - JSON library
+# nlohmann/json - JSON library (fetch first so jwt-cpp can find it)
 FetchContent_Declare(
-    json
+    nlohmann_json
     GIT_REPOSITORY https://github.com/nlohmann/json.git
     GIT_TAG v3.11.3
 )
+FetchContent_MakeAvailable(nlohmann_json)
 
 # cpp-httplib - Header-only HTTP library
 FetchContent_Declare(
@@ -36,17 +37,21 @@ FetchContent_Declare(
     GIT_TAG 3.3.1
 )
 
+# Find OpenSSL for JWT (before jwt-cpp)
+find_package(OpenSSL REQUIRED)
+
 # jwt-cpp - JSON Web Token library
+# Tell jwt-cpp to use the nlohmann_json we already fetched
+set(JWT_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(JWT_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(JWT_EXTERNAL_NLOHMANN_JSON ON CACHE BOOL "" FORCE)
 FetchContent_Declare(
     jwt-cpp
     GIT_REPOSITORY https://github.com/Thalhammer/jwt-cpp.git
     GIT_TAG v0.7.0
 )
 
-FetchContent_MakeAvailable(json httplib spdlog SQLiteCpp jwt-cpp)
-
-# Find OpenSSL for JWT
-find_package(OpenSSL REQUIRED)
+FetchContent_MakeAvailable(httplib spdlog SQLiteCpp jwt-cpp)
 
 # Main server library
 add_library(gridpulse_lib
