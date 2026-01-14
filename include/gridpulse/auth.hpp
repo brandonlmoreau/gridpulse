@@ -6,14 +6,6 @@
 
 namespace gridpulse {
 
-struct User {
-    int id;
-    std::string username;
-    std::string email;
-    std::string password_hash;
-    std::string created_at;
-};
-
 struct TokenPayload {
     int user_id;
     std::string username;
