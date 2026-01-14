@@ -8,6 +8,7 @@ let devices = [];
 let alerts = [];
 let selectedDevice = null;
 let tempChart = null;
+let humidityChart = null;
 let batteryChart = null;
 
 // Initialize
@@ -209,6 +210,7 @@ async function loadTelemetryChart() {
         
         const labels = telemetry.map((t, i) => `#${i + 1}`);
         const temps = telemetry.map(t => t.temperature);
+        const humidities = telemetry.map(t => t.humidity);
         const batteries = telemetry.map(t => t.battery_level);
         
         // Update average temp stat
@@ -216,6 +218,7 @@ async function loadTelemetryChart() {
         document.getElementById('avgTemp').textContent = avgTemp.toFixed(1) + '°C';
         
         updateTempChart(labels, temps);
+        updateHumidityChart(labels, humidities);
         updateBatteryChart(labels, batteries);
     } catch (e) {
         console.error('Failed to load telemetry:', e);
@@ -226,6 +229,10 @@ function clearCharts() {
     if (tempChart) {
         tempChart.destroy();
         tempChart = null;
+    }
+    if (humidityChart) {
+        humidityChart.destroy();
+        humidityChart = null;
     }
     if (batteryChart) {
         batteryChart.destroy();
@@ -270,6 +277,52 @@ function updateTempChart(labels, data) {
                     y: {
                         ticks: { color: '#888899' },
                         grid: { color: '#2a2a3a' }
+                    }
+                }
+            }
+        });
+    }
+}
+
+function updateHumidityChart(labels, data) {
+    const ctx = document.getElementById('humidityChart').getContext('2d');
+    
+    if (humidityChart) {
+        humidityChart.data.labels = labels;
+        humidityChart.data.datasets[0].data = data;
+        humidityChart.update();
+    } else {
+        humidityChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Humidity (%)',
+                    data,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: { color: '#888899' }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#888899' },
+                        grid: { color: '#2a2a3a' }
+                    },
+                    y: {
+                        ticks: { color: '#888899' },
+                        grid: { color: '#2a2a3a' },
+                        min: 0,
+                        max: 100
                     }
                 }
             }
