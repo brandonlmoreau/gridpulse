@@ -16,8 +16,8 @@ WORKDIR /app
 # Copy source code
 COPY . .
 
-# Build the project
-RUN mkdir -p build && cd build && \
+# Build the project (rm -rf build ensures clean build every time)
+RUN rm -rf build && mkdir -p build && cd build && \
     cmake .. -DCMAKE_BUILD_TYPE=Release && \
     cmake --build . --parallel 2
 
