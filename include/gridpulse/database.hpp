@@ -36,6 +36,13 @@ public:
     std::vector<Alert> getUnacknowledgedAlerts();
     std::vector<Alert> getAlertsByDevice(const std::string& device_id);
     bool acknowledgeAlert(int64_t alert_id);
+    
+    // User operations
+    int64_t createUser(const std::string& username, const std::string& email, const std::string& password_hash);
+    std::optional<User> getUserByUsername(const std::string& username);
+    std::optional<User> getUserByEmail(const std::string& email);
+    std::optional<User> getUserById(int64_t user_id);
+    bool userExists(const std::string& username, const std::string& email);
 
 private:
     std::unique_ptr<SQLite::Database> db_;

@@ -10,21 +10,189 @@ let selectedDevice = null;
 let tempChart = null;
 let humidityChart = null;
 let batteryChart = null;
+let currentUser = null;
+let refreshInterval = null;
 
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
+// ========== Authentication ==========
+
+function getToken() {
+    return localStorage.getItem('gridpulse_token');
+}
+
+function setToken(token) {
+    localStorage.setItem('gridpulse_token', token);
+}
+
+function removeToken() {
+    localStorage.removeItem('gridpulse_token');
+}
+
+function getAuthHeaders() {
+    const token = getToken();
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
+
+// Show auth screen
+function showAuthScreen() {
+    document.getElementById('authScreen').classList.remove('hidden');
+    document.getElementById('mainApp').classList.add('hidden');
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+    }
+}
+
+// Show main app
+function showMainApp() {
+    document.getElementById('authScreen').classList.add('hidden');
+    document.getElementById('mainApp').classList.remove('hidden');
+    if (currentUser) {
+        document.getElementById('currentUser').textContent = currentUser.username;
+    }
+    initializeDashboard();
+}
+
+// Tab switching
+function showLoginTab() {
+    document.getElementById('loginTab').classList.add('active');
+    document.getElementById('registerTab').classList.remove('active');
+    document.getElementById('loginForm').classList.remove('hidden');
+    document.getElementById('registerForm').classList.add('hidden');
+    document.getElementById('loginError').textContent = '';
+    document.getElementById('registerError').textContent = '';
+}
+
+function showRegisterTab() {
+    document.getElementById('loginTab').classList.remove('active');
+    document.getElementById('registerTab').classList.add('active');
+    document.getElementById('loginForm').classList.add('hidden');
+    document.getElementById('registerForm').classList.remove('hidden');
+    document.getElementById('loginError').textContent = '';
+    document.getElementById('registerError').textContent = '';
+}
+
+// Handle login
+async function handleLogin(e) {
+    e.preventDefault();
+    const errorEl = document.getElementById('loginError');
+    errorEl.textContent = '';
+    
+    const username = document.getElementById('loginUsername').value;
+    const password = document.getElementById('loginPassword').value;
+    
+    try {
+        const res = await fetch(`${API_BASE}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok) {
+            setToken(data.token);
+            currentUser = data.user;
+            showMainApp();
+        } else {
+            errorEl.textContent = data.error || 'Login failed';
+        }
+    } catch (e) {
+        errorEl.textContent = 'Connection error. Please try again.';
+    }
+}
+
+// Handle registration
+async function handleRegister(e) {
+    e.preventDefault();
+    const errorEl = document.getElementById('registerError');
+    errorEl.textContent = '';
+    
+    const username = document.getElementById('registerUsername').value;
+    const email = document.getElementById('registerEmail').value;
+    const password = document.getElementById('registerPassword').value;
+    
+    try {
+        const res = await fetch(`${API_BASE}/api/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, email, password })
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok) {
+            setToken(data.token);
+            currentUser = data.user;
+            showMainApp();
+        } else {
+            errorEl.textContent = data.error || 'Registration failed';
+        }
+    } catch (e) {
+        errorEl.textContent = 'Connection error. Please try again.';
+    }
+}
+
+// Handle logout
+function handleLogout() {
+    removeToken();
+    currentUser = null;
+    selectedDevice = null;
+    devices = [];
+    alerts = [];
+    showAuthScreen();
+}
+
+// Verify existing token
+async function verifyToken() {
+    const token = getToken();
+    if (!token) {
+        return false;
+    }
+    
+    try {
+        const res = await fetch(`${API_BASE}/api/auth/me`, {
+            headers: getAuthHeaders()
+        });
+        
+        if (res.ok) {
+            currentUser = await res.json();
+            return true;
+        } else {
+            removeToken();
+            return false;
+        }
+    } catch (e) {
+        return false;
+    }
+}
+
+// Initialize dashboard after login
+function initializeDashboard() {
     checkServerStatus();
     loadDevices();
     loadAlerts();
     
     // Auto-refresh every 1 second
-    setInterval(() => {
+    if (refreshInterval) clearInterval(refreshInterval);
+    refreshInterval = setInterval(() => {
         loadDevices();
         loadAlerts();
         if (selectedDevice) {
             loadTelemetryChart();
         }
     }, 1000);
+}
+
+// Initialize app
+document.addEventListener('DOMContentLoaded', async () => {
+    // Check if user is already logged in
+    const isLoggedIn = await verifyToken();
+    
+    if (isLoggedIn) {
+        showMainApp();
+    } else {
+        showAuthScreen();
+    }
 });
 
 // Server Status

@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     cmake \
     git \
     libsqlite3-dev \
+    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory

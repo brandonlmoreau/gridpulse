@@ -1,4 +1,5 @@
 #include "gridpulse/api_server.hpp"
+#include "gridpulse/auth.hpp"
 #include <spdlog/spdlog.h>
 #include <fstream>
 #include <sstream>
@@ -59,7 +60,7 @@ void ApiServer::setupRoutes() {
     server_.set_default_headers({
         {"Access-Control-Allow-Origin", "*"},
         {"Access-Control-Allow-Methods", "GET, POST, OPTIONS"},
-        {"Access-Control-Allow-Headers", "Content-Type"}
+        {"Access-Control-Allow-Headers", "Content-Type, Authorization"}
     });
     
     // Handle preflight OPTIONS requests
@@ -102,6 +103,19 @@ void ApiServer::setupRoutes() {
     // Health check
     server_.Get("/health", [this](const httplib::Request& req, httplib::Response& res) {
         handleHealth(req, res);
+    });
+    
+    // Auth endpoints (public)
+    server_.Post("/api/auth/register", [this](const httplib::Request& req, httplib::Response& res) {
+        handleRegister(req, res);
+    });
+    
+    server_.Post("/api/auth/login", [this](const httplib::Request& req, httplib::Response& res) {
+        handleLogin(req, res);
+    });
+    
+    server_.Get("/api/auth/me", [this](const httplib::Request& req, httplib::Response& res) {
+        handleGetMe(req, res);
     });
     
     // Device endpoints
@@ -155,8 +169,31 @@ void ApiServer::jsonResponse(httplib::Response& res, int status, const nlohmann:
     res.set_header("Content-Type", "application/json");
     res.set_header("Access-Control-Allow-Origin", "*");
     res.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.set_header("Access-Control-Allow-Headers", "Content-Type");
+    res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization");
     res.body = data.dump();
+}
+
+// Auth middleware - verifies JWT and returns user_id if valid
+std::optional<int> ApiServer::authenticate(const httplib::Request& req, httplib::Response& res) {
+    auto auth_header = req.get_header_value("Authorization");
+    if (auth_header.empty()) {
+        errorResponse(res, 401, "Authorization header required");
+        return std::nullopt;
+    }
+    
+    auto token = Auth::extractBearerToken(auth_header);
+    if (!token) {
+        errorResponse(res, 401, "Invalid authorization format. Use: Bearer <token>");
+        return std::nullopt;
+    }
+    
+    auto payload = Auth::verifyToken(*token);
+    if (!payload) {
+        errorResponse(res, 401, "Invalid or expired token");
+        return std::nullopt;
+    }
+    
+    return payload->user_id;
 }
 
 void ApiServer::errorResponse(httplib::Response& res, int status, const std::string& message) {
@@ -338,6 +375,129 @@ void ApiServer::handleAckAlert(const httplib::Request& req, httplib::Response& r
     } catch (const std::exception& e) {
         errorResponse(res, 400, "Invalid alert ID");
     }
+}
+
+// Auth handlers
+
+void ApiServer::handleRegister(const httplib::Request& req, httplib::Response& res) {
+    try {
+        auto json = nlohmann::json::parse(req.body);
+        
+        std::string username = json.at("username").get<std::string>();
+        std::string email = json.at("email").get<std::string>();
+        std::string password = json.at("password").get<std::string>();
+        
+        // Validate input
+        if (username.length() < 3) {
+            errorResponse(res, 400, "Username must be at least 3 characters");
+            return;
+        }
+        if (password.length() < 6) {
+            errorResponse(res, 400, "Password must be at least 6 characters");
+            return;
+        }
+        if (email.find('@') == std::string::npos) {
+            errorResponse(res, 400, "Invalid email address");
+            return;
+        }
+        
+        // Check if user exists
+        if (db_.userExists(username, email)) {
+            errorResponse(res, 409, "Username or email already registered");
+            return;
+        }
+        
+        // Hash password and create user
+        std::string password_hash = Auth::hashPassword(password);
+        auto user_id = db_.createUser(username, email, password_hash);
+        
+        // Generate token
+        std::string token = Auth::generateToken(user_id, username);
+        
+        jsonResponse(res, 201, {
+            {"message", "Registration successful"},
+            {"token", token},
+            {"user", {
+                {"id", user_id},
+                {"username", username},
+                {"email", email}
+            }}
+        });
+        
+        spdlog::info("New user registered: {}", username);
+        
+    } catch (const nlohmann::json::exception& e) {
+        errorResponse(res, 400, "Invalid JSON: username, email, and password required");
+    } catch (const std::exception& e) {
+        spdlog::error("Registration error: {}", e.what());
+        errorResponse(res, 500, "Registration failed");
+    }
+}
+
+void ApiServer::handleLogin(const httplib::Request& req, httplib::Response& res) {
+    try {
+        auto json = nlohmann::json::parse(req.body);
+        
+        std::string username = json.at("username").get<std::string>();
+        std::string password = json.at("password").get<std::string>();
+        
+        // Find user
+        auto user = db_.getUserByUsername(username);
+        if (!user) {
+            // Try email
+            user = db_.getUserByEmail(username);
+        }
+        
+        if (!user) {
+            errorResponse(res, 401, "Invalid credentials");
+            return;
+        }
+        
+        // Verify password
+        if (!Auth::verifyPassword(password, user->password_hash)) {
+            errorResponse(res, 401, "Invalid credentials");
+            return;
+        }
+        
+        // Generate token
+        std::string token = Auth::generateToken(user->id, user->username);
+        
+        jsonResponse(res, 200, {
+            {"message", "Login successful"},
+            {"token", token},
+            {"user", {
+                {"id", user->id},
+                {"username", user->username},
+                {"email", user->email}
+            }}
+        });
+        
+        spdlog::info("User logged in: {}", user->username);
+        
+    } catch (const nlohmann::json::exception& e) {
+        errorResponse(res, 400, "Invalid JSON: username and password required");
+    } catch (const std::exception& e) {
+        spdlog::error("Login error: {}", e.what());
+        errorResponse(res, 500, "Login failed");
+    }
+}
+
+void ApiServer::handleGetMe(const httplib::Request& req, httplib::Response& res) {
+    auto user_id = authenticate(req, res);
+    if (!user_id) return;  // authenticate already sent error response
+    
+    auto user = db_.getUserById(*user_id);
+    if (!user) {
+        errorResponse(res, 404, "User not found");
+        return;
+    }
+    
+    jsonResponse(res, 200, {
+        {"id", user->id},
+        {"username", user->username},
+        {"email", user->email},
+        {"created_at", user->created_at}
+    });
 }
 
 } // namespace gridpulse

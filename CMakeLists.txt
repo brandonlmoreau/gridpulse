@@ -36,17 +36,29 @@ FetchContent_Declare(
     GIT_TAG 3.3.1
 )
 
-FetchContent_MakeAvailable(json httplib spdlog SQLiteCpp)
+# jwt-cpp - JSON Web Token library
+FetchContent_Declare(
+    jwt-cpp
+    GIT_REPOSITORY https://github.com/Thalhammer/jwt-cpp.git
+    GIT_TAG v0.7.0
+)
+
+FetchContent_MakeAvailable(json httplib spdlog SQLiteCpp jwt-cpp)
+
+# Find OpenSSL for JWT
+find_package(OpenSSL REQUIRED)
 
 # Main server library
 add_library(gridpulse_lib
     src/database.cpp
     src/api_server.cpp
     src/alert_checker.cpp
+    src/auth.cpp
 )
 
 target_include_directories(gridpulse_lib PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${jwt-cpp_SOURCE_DIR}/include
 )
 
 target_link_libraries(gridpulse_lib PUBLIC
@@ -54,6 +66,8 @@ target_link_libraries(gridpulse_lib PUBLIC
     httplib::httplib
     spdlog::spdlog
     SQLiteCpp
+    OpenSSL::SSL
+    OpenSSL::Crypto
 )
 
 # Main server executable

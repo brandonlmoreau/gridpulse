@@ -39,10 +39,29 @@ struct Alert {
     std::string created_at;
 };
 
+// User account for authentication
+struct User {
+    int64_t id = 0;
+    std::string username;
+    std::string email;
+    std::string password_hash;
+    std::string created_at;
+};
+
 // JSON serialization
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Device, id, device_id, name, location, status, created_at, updated_at)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Telemetry, id, device_id, temperature, humidity, battery_level, timestamp)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Alert, id, device_id, alert_type, message, severity, acknowledged, created_at)
+
+// User JSON - exclude password_hash for safety
+inline void to_json(nlohmann::json& j, const User& u) {
+    j = nlohmann::json{{"id", u.id}, {"username", u.username}, {"email", u.email}, {"created_at", u.created_at}};
+}
+inline void from_json(const nlohmann::json& j, User& u) {
+    j.at("username").get_to(u.username);
+    if (j.contains("email")) j.at("email").get_to(u.email);
+    if (j.contains("password")) j.at("password").get_to(u.password_hash);
+}
 
 // Alert threshold configuration
 struct AlertConfig {

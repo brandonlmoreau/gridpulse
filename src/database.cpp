@@ -57,10 +57,23 @@ void Database::createTables() {
         )
     )");
     
+    // Users table
+    db_->exec(R"(
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    )");
+    
     // Create indexes for common queries
     db_->exec("CREATE INDEX IF NOT EXISTS idx_telemetry_device ON telemetry(device_id)");
     db_->exec("CREATE INDEX IF NOT EXISTS idx_telemetry_timestamp ON telemetry(timestamp)");
     db_->exec("CREATE INDEX IF NOT EXISTS idx_alerts_device ON alerts(device_id)");
+    db_->exec("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)");
+    db_->exec("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)");
 }
 
 std::string Database::getCurrentTimestamp() {
@@ -266,6 +279,86 @@ bool Database::acknowledgeAlert(int64_t alert_id) {
         spdlog::info("Alert {} acknowledged", alert_id);
     }
     return updated;
+}
+
+// User operations
+
+int64_t Database::createUser(const std::string& username, const std::string& email, const std::string& password_hash) {
+    SQLite::Statement query(*db_,
+        "INSERT INTO users (username, email, password_hash, created_at) VALUES (?, ?, ?, ?)");
+    
+    query.bind(1, username);
+    query.bind(2, email);
+    query.bind(3, password_hash);
+    query.bind(4, getCurrentTimestamp());
+    
+    query.exec();
+    auto id = db_->getLastInsertRowid();
+    spdlog::info("Created user: {} (id={})", username, id);
+    return id;
+}
+
+std::optional<User> Database::getUserByUsername(const std::string& username) {
+    SQLite::Statement query(*db_,
+        "SELECT id, username, email, password_hash, created_at FROM users WHERE username = ?");
+    query.bind(1, username);
+    
+    if (query.executeStep()) {
+        User u;
+        u.id = query.getColumn(0).getInt64();
+        u.username = query.getColumn(1).getString();
+        u.email = query.getColumn(2).getString();
+        u.password_hash = query.getColumn(3).getString();
+        u.created_at = query.getColumn(4).getString();
+        return u;
+    }
+    return std::nullopt;
+}
+
+std::optional<User> Database::getUserByEmail(const std::string& email) {
+    SQLite::Statement query(*db_,
+        "SELECT id, username, email, password_hash, created_at FROM users WHERE email = ?");
+    query.bind(1, email);
+    
+    if (query.executeStep()) {
+        User u;
+        u.id = query.getColumn(0).getInt64();
+        u.username = query.getColumn(1).getString();
+        u.email = query.getColumn(2).getString();
+        u.password_hash = query.getColumn(3).getString();
+        u.created_at = query.getColumn(4).getString();
+        return u;
+    }
+    return std::nullopt;
+}
+
+std::optional<User> Database::getUserById(int64_t user_id) {
+    SQLite::Statement query(*db_,
+        "SELECT id, username, email, password_hash, created_at FROM users WHERE id = ?");
+    query.bind(1, user_id);
+    
+    if (query.executeStep()) {
+        User u;
+        u.id = query.getColumn(0).getInt64();
+        u.username = query.getColumn(1).getString();
+        u.email = query.getColumn(2).getString();
+        u.password_hash = query.getColumn(3).getString();
+        u.created_at = query.getColumn(4).getString();
+        return u;
+    }
+    return std::nullopt;
+}
+
+bool Database::userExists(const std::string& username, const std::string& email) {
+    SQLite::Statement query(*db_,
+        "SELECT COUNT(*) FROM users WHERE username = ? OR email = ?");
+    query.bind(1, username);
+    query.bind(2, email);
+    
+    if (query.executeStep()) {
+        return query.getColumn(0).getInt() > 0;
+    }
+    return false;
 }
 
 } // namespace gridpulse
